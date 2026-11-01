@@ -2,7 +2,7 @@ module Evaluator (evaluate) where
 
 import Data.Char (isDigit, isSpace)
 
-import Data.Fixed (mod')
+import Data.Fixed (mod', div')
 
 data Token
   = Number Double | Plus | Minus | Times | Divide | Power
@@ -13,7 +13,7 @@ data Expr
   = Lit Double | Positive Expr | Negative Expr
   | Add Expr Expr | Sub Expr Expr
   | Mul Expr Expr | Div Expr Expr | Pow Expr Expr
-  | Mod Expr Expr
+  | Mod Expr Expr | FloorDiv Expr Expr
   deriving (Eq, Show)
 
 -- Stage 1: split a string into tokens.
@@ -80,6 +80,9 @@ parseProduct ts = do
     continue lhs (Modulo:ts) = do
       (rhs, rest) <- parsePower ts
       continue (Mod lhs rhs) rest
+    continue lhs (FloorDivide:ts) = do
+      (rhs, rest) <- parsePower ts
+      continue (FloorDiv lhs rhs) rest
     continue lhs rest = Right (lhs, rest)
 
 parsePower :: Parser
@@ -121,6 +124,7 @@ eval (Mul a b) = binary (*) a b
 eval (Pow a b) = binary (**) a b
 eval (Div a b) = safeBinary (/) a b
 eval (Mod a b) = safeBinary mod' a b
+eval (FloorDiv a b) = safeBinary (\x y -> fromIntegral(div' x y)) a b
 
 type Binary = (Double -> Double -> Double) -> Expr -> Expr -> Either String Double
 
