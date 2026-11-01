@@ -2,6 +2,8 @@ module Evaluator (evaluate) where
 
 import Data.Char (isDigit, isSpace)
 
+import Data.Fixed (mod')
+
 data Token
   = Number Double | Plus | Minus | Times | Divide | Power
   | FloorDivide | Modulo | Open | Close
@@ -11,6 +13,7 @@ data Expr
   = Lit Double | Positive Expr | Negative Expr
   | Add Expr Expr | Sub Expr Expr
   | Mul Expr Expr | Div Expr Expr | Pow Expr Expr
+  | Mod Expr Expr
   deriving (Eq, Show)
 
 -- Stage 1: split a string into tokens.
@@ -74,6 +77,9 @@ parseProduct ts = do
     continue lhs (Divide:ts) = do
       (rhs, rest) <- parsePower ts
       continue (Div lhs rhs) rest
+    continue lhs (Modulo:ts) = do
+      (rhs, rest) <- parsePower ts
+      continue (Mod lhs rhs) rest
     continue lhs rest = Right (lhs, rest)
 
 parsePower :: Parser
@@ -113,14 +119,20 @@ eval (Add a b) = binary (+) a b
 eval (Sub a b) = binary (-) a b
 eval (Mul a b) = binary (*) a b
 eval (Pow a b) = binary (**) a b
-eval (Div a b) = do
+eval (Div a b) = safeBinary (/) a b
+eval (Mod a b) = safeBinary mod' a b
+
+type Binary = (Double -> Double -> Double) -> Expr -> Expr -> Either String Double
+
+safeBinary :: Binary
+safeBinary op a b = do
   numerator <- eval a
   denominator <- eval b
   if abs denominator < 1e-9
      then Left "Division by zero"
-     else Right (numerator / denominator)
+     else Right (op numerator denominator)
 
-binary :: (Double -> Double -> Double) -> Expr -> Expr -> Either String Double
+binary :: Binary
 binary op a b = do
   x <- eval a
   y <- eval b
