@@ -1,4 +1,4 @@
-module Parse (Expr(..),parseExpression) where
+module Parse ( Expr(..), parse) where
 
 import Tokenize (Token(..))
 
@@ -9,10 +9,19 @@ data Expr
   | Mod Expr Expr | FloorDiv Expr Expr
   deriving (Eq, Show)
 
-
 -- Stage 2: construct an expression tree.
 -- Each parser returns the expression and tokens still available.
 type Parser = [Token] -> Either String (Expr, [Token])
+
+-- Fix 4: Leftover tokens used to be silently discarded, so "1 2" and
+-- "(1+2))" returned a number. Parsing now succeeds only if every token
+-- was consumed.
+parse :: [Token] -> Either String Expr
+parse ts = do
+  (expr, rest) <- parseExpression ts
+  case rest of
+    []      -> Right expr
+    (t : _) -> Left ("Unexpected token: " ++ show t)
 
 parseExpression :: Parser
 parseExpression = parseSum
@@ -49,14 +58,17 @@ parseProduct ts = do
       continue (FloorDiv lhs rhs) rest
     continue lhs rest = Right (lhs, rest)
 
+-- Fix 3: exponents used to be left-associative, making
+-- 2 ** 2 ** 4 = (2 ** 2) ** 4 = 256 instead of 2 ** (2 ** 4) = 65536,
+-- which is the correct (right-associative) answer.
 parsePower :: Parser
 parsePower ts = do
   (first, rest) <- parseUnary ts
   continue first rest
   where
     continue lhs (Power:ts) = do
-      (rhs, rest) <- parseUnary ts
-      continue (Pow lhs rhs) rest
+      (rhs, rest) <- parsePower ts
+      Right (Pow lhs rhs, rest)
     continue lhs rest = Right (lhs, rest)
 
 parseUnary :: Parser
